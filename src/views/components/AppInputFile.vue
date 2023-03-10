@@ -9,7 +9,7 @@
       @change="onFileSelected"
       :accept="allowed"
     />
-    <label ref="button_ref" class="btn btn-xs w-full" :for="props.id">{{ props.buttonText }}</label>
+    <label ref="button_ref" class="btn w-full" :for="props.id">{{ props.buttonText }}</label>
   </div>
 </template>
 
