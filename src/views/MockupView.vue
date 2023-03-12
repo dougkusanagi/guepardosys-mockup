@@ -14,7 +14,7 @@
         :class="{ 'bg-base-300 border-none': openTab === 2 }"
         @click="toggleTabs(2)"
       >
-        Imagens
+        Imagens ({{ image_list ? image_list.length : 0 }})
       </button>
 
       <button
@@ -22,7 +22,7 @@
         :class="{ 'bg-base-300 border-none': openTab === 3 }"
         @click="toggleTabs(3)"
       >
-        Mockups
+        Mockups ({{ mockup_list ? mockup_list.length : 0 }})
       </button>
     </div>
   </div>
@@ -42,34 +42,11 @@
     <div class="bg-base-300 px-3" :class="{ hidden: openTab !== 1, block: openTab === 1 }">
       <div class="flex gap-6 py-3">
         <div class="w-1/2">
-          <div class="flex flex-col gap-3">
-            <div class="flex items-center gap-3">
+          <h3 class="mb-3 text-lg text-center">Posição</h3>
+          <div class="flex flex-row gap-3">
+            <div class="w-1/2 flex items-center gap-2">
               <AppInputBase
-                v-model="form_text.input_width"
-                label="L"
-                id="input_width"
-                type="number"
-                min="0"
-              />
-            </div>
-
-            <div class="flex items-center gap-3">
-              <AppInputBase
-                v-model="form_text.input_height"
-                label="A"
-                id="input_height"
-                type="number"
-                min="0"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div class="w-1/2">
-          <div class="flex flex-col gap-3">
-            <div class="flex items-center gap-3">
-              <AppInputBase
-                v-model="form_text.input_left"
+                v-model="config_image.left"
                 label="X"
                 id="input_left"
                 type="number"
@@ -77,9 +54,9 @@
               />
             </div>
 
-            <div class="flex items-center gap-3">
+            <div class="w-1/2 flex items-center gap-2">
               <AppInputBase
-                v-model="form_text.input_top"
+                v-model="config_image.top"
                 label="Y"
                 id="input_top"
                 type="number"
@@ -88,127 +65,97 @@
             </div>
           </div>
         </div>
-      </div>
 
-      <div class="flex gap-6 py-3"></div>
+        <div class="w-1/2">
+          <h3 class="mb-4 text-lg text-center">Tamanho</h3>
+
+          <div class="divide-y-2 divide-base-100 space-y-2">
+            <div>
+              <div class="form-control">
+                <label class="label cursor-pointer justify-start">
+                  <input
+                    type="radio"
+                    class="radio radio-xs checked:bg-red-500"
+                    value="cover"
+                    v-model="size_selected"
+                  />
+                  <span class="label-text ml-2">Esticar e Cobrir</span>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <div class="form-control">
+                <label class="label cursor-pointer justify-start">
+                  <input
+                    type="radio"
+                    class="radio radio-xs checked:bg-red-500"
+                    value="manual"
+                    v-model="size_selected"
+                  />
+                  <span class="label-text ml-2">Manual</span>
+                </label>
+              </div>
+
+              <div class="flex flex-row gap-3">
+                <div class="w-1/2 flex items-center gap-2">
+                  <AppInputBase
+                    v-model="config_image.width"
+                    label="L"
+                    type="number"
+                    min="0"
+                    ref="input_width"
+                  />
+                </div>
+
+                <div class="w-1/2 flex items-center gap-2">
+                  <AppInputBase v-model="config_image.height" label="A" type="number" min="0" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="flex-1 h-full" :class="{ hidden: openTab !== 2, block: openTab === 2 }">
-      <div class="max-w-full overflow-y-auto p-1" ref="ref_image_tab"></div>
+    <div class="flex-1 max-h-full" :class="{ hidden: openTab !== 2, block: openTab === 2 }">
+      <div class="max-w-full overflow-y-auto p-1" ref="image_tab"></div>
     </div>
   </div>
 
   <main class="bg-base-200">
-    <canvas ref="screen" class="screen bg-slate-600"></canvas>
+    <canvas ref="screen" class="screen bg-gray-200"></canvas>
   </main>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch, type Ref } from "vue";
+import { reactive, ref, watch, type Ref } from "vue";
 import AppInputFile from "./components/AppInputFile.vue";
 import AppInputBase from "./components/AppInputBase.vue";
 import { createImagelist } from "@/composables/useImage";
+import useCanvas from "@/composables/useCanvas";
 
-interface IFormText {
-  input_width: number;
-  input_height: number;
-  input_left: number;
-  input_top: number;
-}
-interface IFormFile {
+const form_file = reactive<{
   input_image_list: FileList | null;
   input_mockup_list: FileList | null;
-}
-
-const form_text = reactive<IFormText>({
-  input_width: 1200,
-  input_height: 1200,
-  input_left: 0,
-  input_top: 0
-});
-const form_file = reactive<IFormFile>({
+}>({
   input_image_list: null,
   input_mockup_list: null
 });
 
 const screen: Ref = ref<HTMLCanvasElement>();
-const context: Ref = ref<CanvasRenderingContext2D>();
-const image_list: Ref = ref<HTMLImageElement>();
-const mockup_list: Ref = ref<HTMLImageElement>();
-const image_index = ref(0);
-const mockup_index = ref(0);
-const ref_image_tab = ref<HTMLDivElement>();
-const ref_mockup_tab = ref<HTMLDivElement>();
-const openTab = ref(2);
+const image_tab = ref<HTMLDivElement>();
+const mockup_tab = ref<HTMLDivElement>();
+const input_width = ref();
+const input_height = ref();
+const size_selected = ref("manual");
 
-const imageStyle = ["w-[calc(33.333333%-8px)]", "m-1", "inline-flex", "cursor-pointer"];
-const imageActiveStyle = ["outline", "outline-offset-4", "outline-blue-500", "image-active"];
-
+const openTab = ref(1);
 function toggleTabs(tabNumber: number) {
   openTab.value = tabNumber;
 }
 
-onMounted(() => {
-  screen.value.width = form_text.input_width;
-  screen.value.height = form_text.input_height;
-  context.value = screen.value.getContext("2d") as CanvasRenderingContext2D;
-});
-
-function renderImage(image: HTMLImageElement) {
-  context.value.drawImage(
-    image,
-    form_text.input_left,
-    form_text.input_top,
-    form_text.input_width,
-    form_text.input_height
-  );
-}
-
-function clearCanvas() {
-  context.value.clearRect(0, 0, screen.value.width, screen.value.height);
-}
-
-function haveImages(): boolean {
-  return (
-    image_list.value &&
-    image_list.value.length > 0 &&
-    image_list.value.length >= 0 &&
-    image_index.value >= 0 &&
-    image_index.value < image_list.value.length
-  );
-}
-
-function haveMockups(): boolean {
-  return (
-    mockup_list.value &&
-    mockup_list.value.length > 0 &&
-    mockup_list.value.length >= 0 &&
-    mockup_index.value >= 0 &&
-    mockup_index.value < mockup_list.value.length
-  );
-}
-
-function processCurrentRender() {
-  clearCanvas();
-
-  if (haveImages()) {
-    const image = image_list.value[image_index.value] as HTMLImageElement;
-    renderImage(image);
-  }
-
-  if (haveMockups()) {
-    const mockup = mockup_list.value[mockup_index.value] as HTMLImageElement;
-    renderImage(mockup);
-  }
-}
-
-function setImageListIndex(index: number) {
-  if (index >= 0 && index < image_list.value.length) {
-    image_index.value = index;
-  }
-
-  processCurrentRender();
-}
+const { config_image, config_mockup, image_list, mockup_list } = useCanvas(screen);
 
 async function getImageListCreated(file_list: FileList): Promise<HTMLImageElement[] | void> {
   if (file_list.length > 0) {
@@ -217,63 +164,6 @@ async function getImageListCreated(file_list: FileList): Promise<HTMLImageElemen
   }
 }
 
-function styleImageFromList(image: HTMLImageElement) {
-  imageStyle.forEach((style) => image.classList.add(style));
-}
-
-function styleImageActiveFromList(image: HTMLImageElement) {
-  imageActiveStyle.forEach((style) => image.classList.add(style));
-}
-
-function setCurrentImage(event: Event) {
-  const target = event.target as HTMLImageElement;
-  if (target.dataset.index) {
-    const index = parseInt(target.dataset.index);
-    setImageListIndex(index);
-  }
-}
-
-function clearImageListTab(ref_image_tab: Ref<HTMLDivElement | undefined>) {
-  ref_image_tab.value!.innerHTML = "";
-}
-
-function renderThumbs() {
-  if (haveImages() && ref_image_tab.value) {
-    clearImageListTab(ref_image_tab);
-
-    image_list.value.forEach((image: HTMLImageElement, index: number) => {
-      image.dataset.index = index.toString();
-      image.onclick = setCurrentImage;
-
-      styleImageFromList(image);
-
-      if (index === image_index.value) {
-        styleImageActiveFromList(image);
-      }
-
-      ref_image_tab.value!.appendChild(image);
-    });
-  }
-
-  if (haveMockups() && ref_mockup_tab.value) {
-    clearImageListTab(ref_mockup_tab);
-
-    image_list.value.forEach((image: HTMLImageElement, index: number) => {
-      image.dataset.index = index.toString();
-      image.onclick = setCurrentImage;
-
-      styleImageFromList(image);
-
-      if (index === image_index.value) {
-        styleImageActiveFromList(image);
-      }
-
-      ref_mockup_tab.value!.appendChild(image);
-    });
-  }
-}
-
-/** Implement Debounce */
 watch(form_file, async (form_file) => {
   if (form_file.input_image_list) {
     image_list.value = await getImageListCreated(form_file.input_image_list);
@@ -282,21 +172,18 @@ watch(form_file, async (form_file) => {
   if (form_file.input_mockup_list) {
     mockup_list.value = await getImageListCreated(form_file.input_mockup_list);
   }
-
-  renderThumbs();
-
-  processCurrentRender();
 });
 
-watch(form_text, processCurrentRender);
+watch(size_selected, (new_size_selected) => {
+  console.log(input_width.value.classList);
 
-// const imageActiveStyle = ["outline", "outline-offset-4", "outline-blue-500", "image-active"];
-watch(image_index, (new_index, old_index) => {
-  const old_image_active = document.querySelector(`[data-index="${old_index}"]`);
-  imageActiveStyle.forEach((style) => old_image_active?.classList.remove(style));
-
-  const new_image_active = document.querySelector(`[data-index="${new_index}"]`);
-  imageActiveStyle.forEach((style) => new_image_active?.classList.add(style));
+  if (new_size_selected === "cover") {
+    config_image.width = screen.value.width;
+    config_image.height = screen.value.height;
+  } else if (new_size_selected === "manual") {
+    config_image.width = 0;
+    config_image.height = 0;
+  }
 });
 </script>
 
